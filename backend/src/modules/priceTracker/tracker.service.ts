@@ -1,10 +1,8 @@
-
-
 // tracker.service.ts
 import puppeteer from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
 import logger from "../../config/logger.js";
-import cron from 'node-cron';
+import cron from "node-cron";
 import { ProductModel } from "./tracker.model.js";
 
 // Puppeteer Stealth for Extra Safety
@@ -23,200 +21,118 @@ const extractProductId = (url: string, platform: string): string => {
     return '';
 };
 
-// Helper function to scrape product details (shared between initial scrape and cron updates)
+// Safe element extraction
+const getElement = async (page: any, selector: string) => {
+    try {
+        await page.waitForSelector(selector, { timeout: 7000 });
+        return await page.$eval(selector, (el: any) => el.textContent?.trim() || "No Data Found");
+    } catch {
+        return "No Data Found";
+    }
+};
+
+const getElementAttr = async (page: any, selector: string, attr: string) => {
+    try {
+        await page.waitForSelector(selector, { timeout: 7000 });
+        return await page.$eval(selector, (el: any) => el.getAttribute(attr)?.trim() || "No Data Found");
+    } catch {
+        return "No Data Found";
+    }
+};
+
+// Scraping logic
 const scrapeProductFromPage = async (page: any, platform: string) => {
-    const getElement = async (selector: string) => {
-        await page.waitForSelector(selector, { timeout: 7000 }).catch(() => { }); // wait for element
-        return await page.$eval(selector, (El: Element) => El?.textContent?.trim() || "No Data Found")
-            .catch(() => "No Data Found");
-    };
-
-    const getElementAttr = async (selector: string, attr: string) => {
-        await page.waitForSelector(selector, { timeout: 7000 }).catch(() => { }); // wait for element
-        return await page.$eval(selector, (El: Element) => El?.getAttribute(attr)?.trim() || "No Data Found")
-            .catch(() => "No Data Found");
-    };
-
     if (platform === 'amazon') {
-        const title = await getElement('#productTitle');
-        // const img = await getElementAttr('#landingImage', 'src');
-        // const img = await getElementAttr('#landingImage', 'data-old-hires') || await getElementAttr('#landingImage', 'src');
-        const img = await page.$eval('#landingImage', (el: Element) => {
-            const imgEl = el as HTMLImageElement;
-            const dynamic = imgEl.getAttribute('data-a-dynamic-image');
-            if (dynamic) {
-                const parsed = JSON.parse(dynamic);
-                return Object.keys(parsed)[0]; // first image URL
-            }
-            return imgEl.getAttribute('data-old-hires') || imgEl.getAttribute('src');
+        const title = await getElement(page, '#productTitle');
+        const img = await page.$eval('#landingImage', (el: any) => {
+            const dynamic = el.getAttribute('data-a-dynamic-image');
+            if (dynamic) return Object.keys(JSON.parse(dynamic))[0];
+            return el.getAttribute('data-old-hires') || el.getAttribute('src');
         });
-
         logger.info('Image debug:', img);
-        const priceText = await getElement('.a-price-whole');
+        const priceText = await getElement(page, '.a-price-whole');
         const numericPrice = Number(priceText.replace(/[^0-9.]/g, ""));
-        const discount = await getElement('.savingsPercentage');
-        const availability = await getElement('#availability .a-size-medium');
-        const ratingsText = await getElement('#acrPopover > span.a-declarative > a > span');
+        const discount = await getElement(page, '.savingsPercentage');
+        const availability = await getElement(page, '#availability .a-size-medium');
+        const ratingsText = await getElement(page, '#acrPopover > span.a-declarative > a > span');
         const numericRatings = Number(ratingsText.replace(/[^0-9.]/g, ""));
-        const totalRatingsText = await getElement('#acrCustomerReviewText');
+        const totalRatingsText = await getElement(page, '#acrCustomerReviewText');
         const numericTotalRatings = Number(totalRatingsText.replace(/[^0-9]/g, ""));
 
-        return {
-            title,
-            img,
-            numericPrice,
-            discount,
-            availability,
-            numericRatings,
-            numericTotalRatings
-        };
-    } // Replace the Flipkart image scraping part with this:
-    else if (platform === 'flipkart') {
-        const title = await getElement('.VU-ZEz');
+        return { title, img, numericPrice, discount, availability, numericRatings, numericTotalRatings };
+    } else if (platform === 'flipkart') {
+        const title = await getElement(page, '.VU-ZEz');
 
-        // Try multiple selectors for image - Flipkart changes classes frequently
+        // Multiple selectors for image
+        const imageSelectors = ['img.DByuf4','img._396cs4','div.CXW8mj img','img._53J4C-','._2r_T1I img','img[data-tkid]'];
         let img = "No Data Found";
-
-        const imageSelectors = [
-            'img.DByuf4',
-            'img._396cs4',
-            'div.CXW8mj img',
-            'img._53J4C-',
-            '.CXW8mj img',
-            '._2r_T1I img',
-            'img[data-tkid]'
-        ];
-
-        for (const selector of imageSelectors) {
+        for (const sel of imageSelectors) {
             try {
-                await page.waitForSelector(selector, { timeout: 3000 });
-                img = await page.$eval(selector, (el: HTMLImageElement) => el.src);
-                if (img && img !== "No Data Found" && !img.includes('data:image')) {
-                    logger.info(`Found image with selector: ${selector}`);
-                    break;
-                }
-            } catch (error) {
-                // Continue to next selector
-                continue;
-            }
+                await page.waitForSelector(sel, { timeout: 3000 });
+                img = await page.$eval(sel, (el: HTMLImageElement) => el.src);
+                if (img && !img.includes('data:image')) break;
+            } catch { continue; }
         }
-
-        // If still no image found, try a more general approach
         if (img === "No Data Found") {
             try {
                 img = await page.evaluate(() => {
                     const images = document.querySelectorAll('img');
                     for (const image of images) {
                         const src = (image as HTMLImageElement).src;
-                        if (src && src.includes('flipkart') &&
-                            (src.includes('product') || src.includes('image')) &&
-                            !src.includes('data:image') &&
-                            !src.includes('icon') &&
-                            !src.includes('logo')) {
-                            return src;
-                        }
+                        if (src.includes('flipkart') && !src.includes('data:image') && !src.includes('icon') && !src.includes('logo')) return src;
                     }
                     return "No Data Found";
                 });
-            } catch (error) {
-                logger.error('Error in general image search:', (error as any));
-            }
+            } catch (err) { logger.error('Error in general image search:', (err as any)); }
         }
 
-        const priceText = await getElement('.Nx9bqj');
+        const priceText = await getElement(page, '.Nx9bqj');
         const numericPrice = Number(priceText.replace(/[^0-9.]/g, ""));
-        const discount = await getElement('.UkUFwK span');
+        const discount = await getElement(page, '.UkUFwK span');
         const availability = "Available";
-        const ratingsText = await getElement('.XQDdHH');
+        const ratingsText = await getElement(page, '.XQDdHH');
         const numericRatings = Number(ratingsText.replace(/[^0-9.]/g, ""));
-        const totalRatingsText = await getElement('.Wphh3N span span');
+        const totalRatingsText = await getElement(page, '.Wphh3N span span');
         const numericTotalRatings = Number(totalRatingsText.replace(/[^0-9]/g, ""));
 
-        return {
-            title,
-            img,
-            numericPrice,
-            discount,
-            availability,
-            numericRatings,
-            numericTotalRatings
-        };
+        return { title, img, numericPrice, discount, availability, numericRatings, numericTotalRatings };
     }
-
     throw new Error(`Unsupported platform: ${platform}`);
 };
 
-// Main service function: fetch product details (check DB first, scrape if needed)
+// Main fetchProductDetails function
 export const fetchProductDetails = async (url: string, platform: string) => {
     let browser;
-
     try {
         logger.info(`URL Received: ${url}`);
         logger.info(`Platform: ${platform}`);
-
-        // Extract product ID
         const pid = extractProductId(url, platform);
-        if (!pid) {
-            throw new Error("Invalid URL format for platform");
-        }
-
+        if (!pid) throw new Error("Invalid URL format for platform");
         logger.info(`Product ID: ${pid}`);
 
-        // Check if product exists in database first
-        const existingProduct = await ProductModel.findOne({
-            productId: pid,
-            productPlatform: platform
-        });
+        const existingProduct = await ProductModel.findOne({ productId: pid, productPlatform: platform });
 
-
-        // If product already exists in DB
         if (existingProduct) {
-            // Only launch browser if a critical field is missing
             if (!existingProduct.productImg || existingProduct.productImg === "No Data Found") {
-                browser = await (puppeteer as any).launch({
-                    headless: true,
-                    args: ['--no-sandbox', '--disable-setuid-sandbox']
-                    });
-
+                browser = await (puppeteer as any).launch({ headless: true, args: ['--no-sandbox','--disable-setuid-sandbox'] });
                 const page = await browser.newPage();
-                await page.setUserAgent(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-                );
-                await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
-
+                await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
+                await page.goto(url, { waitUntil: "networkidle2", timeout: 20000 });
                 const freshData = await scrapeProductFromPage(page, platform);
                 existingProduct.productImg = freshData.img;
                 await existingProduct.save();
             }
-
             logger.info("Product found in database, returning existing data with price history");
             return existingProduct;
         }
 
-
-        // Product doesn't exist, scrape and save
         logger.info("Product not found in database, scraping...");
-
-        // Launch Browser
-        browser = await (puppeteer as any).launch({ headless: "new" });
-        logger.info("Browser launched");
-
-        // New Page in the Browser
+        browser = await (puppeteer as any).launch({ headless: true, args: ['--no-sandbox','--disable-setuid-sandbox'] });
         const page = await browser.newPage();
-        await page.setUserAgent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        );
+        await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
+        await page.goto(url, { waitUntil: "networkidle2", timeout: 20000 });
 
-        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
-        logger.info("Landed onto Page..");
-
-
-        // Scrape product details
         const scrapedData = await scrapeProductFromPage(page, platform);
-
-        // Create new product document
         const newProduct = new ProductModel({
             productId: pid,
             productUrl: url,
@@ -227,113 +143,65 @@ export const fetchProductDetails = async (url: string, platform: string) => {
             productTotalRatings: scrapedData.numericTotalRatings,
             productDiscount: scrapedData.discount,
             productIsavailable: scrapedData.availability,
-            productPriceHistory: [
-                {
-                    price: scrapedData.numericPrice,
-                    date: new Date()
-                }
-            ],
+            productPriceHistory: [{ price: scrapedData.numericPrice, date: new Date() }],
             productPlatform: platform
         });
-
-        // Save the Product
         await newProduct.save();
         logger.info("Product Saved Successfully in Database");
-        logger.info(`Image Url : ${newProduct.productImg}`);
-        logger.info(newProduct);
-
-        return newProduct; // This includes productPriceHistory automatically
-
+        return newProduct;
     } catch (error: any) {
         logger.error("Error while fetching the Product", error);
         throw error;
     } finally {
-        if (browser) {
-            await browser.close();
-        }
+        if (browser) await browser.close();
     }
 };
 
-// Cron job function to update all products automatically
+// Cron job to update all products
 const updateAllProductPrices = async () => {
     let browser;
-
     try {
         logger.info("Starting scheduled price update...");
-
-        // Get all products from database
         const products = await ProductModel.find({});
-
-        if (products.length === 0) {
-            logger.info("No products found to update");
-            return;
-        }
-
-        // Launch browser once for all products
-        browser = await (puppeteer as any).launch({ headless: "new" });
+        if (!products.length) { logger.info("No products found to update"); return; }
+        browser = await (puppeteer as any).launch({ headless: true, args: ['--no-sandbox','--disable-setuid-sandbox'] });
 
         for (const product of products) {
             try {
-                logger.info(`Updating product: ${product.productName} (${product.productId})`);
-
                 const page = await browser.newPage();
-                await page.setUserAgent(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-                    "(KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-                );
-
-                await page.goto(product.productUrl, {
-                    waitUntil: "domcontentloaded",
-                    timeout: 15000
-                });
-
-                // Use the same scraping function (no code duplication)
+                await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
+                await page.goto(product.productUrl, { waitUntil: "networkidle2", timeout: 20000 });
                 const currentData = await scrapeProductFromPage(page, product.productPlatform);
 
-                // Check if price has changed
                 if (currentData.numericPrice !== product.productPrice) {
                     logger.info(`Price changed for ${product.productName}: ${product.productPrice} → ${currentData.numericPrice}`);
-
-                    // Update product price and add to price history
                     product.productPrice = currentData.numericPrice;
-                    product.productPriceHistory.push({
-                        price: currentData.numericPrice,
-                        date: new Date()
-                    });
+                    product.productPriceHistory.push({ price: currentData.numericPrice, date: new Date() });
                 }
-
-                // Update other details that might have changed
                 product.productRatings = currentData.numericRatings;
                 product.productTotalRatings = currentData.numericTotalRatings;
                 product.productDiscount = currentData.discount;
                 product.productIsavailable = currentData.availability;
 
-                // Save updated product
+
                 await product.save();
-
                 await page.close();
-
-                // Add delay between requests to avoid being blocked
+                // Delay to reduce chance of being blocked
                 await new Promise(resolve => setTimeout(resolve, 2000));
-
             } catch (error) {
-                logger.error(`Error updating product ${product.productId}:` + error);
+                logger.error(`Error updating product ${product.productId}:`, (error as any));
                 continue; // Continue with next product
             }
         }
-
         logger.info("Scheduled price update completed");
-
     } catch (error) {
-        logger.error("Error in scheduled price update:" + error);
+        logger.error("Error in scheduled price update:", (error as any));
     } finally {
-        if (browser) {
-            await browser.close();
-        }
+        if (browser) await browser.close();
     }
 };
 
-// Auto-start cron job when service loads (runs every 6 hours)
+// Auto-start cron job (runs every 6 hours)
 cron.schedule('0 */6 * * *', updateAllProductPrices, {
     timezone: "Asia/Kolkata"
 });
