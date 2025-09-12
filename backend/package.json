@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon --exec \"node --import tsx src/server.ts\"",
-    "build": "npm install && tsc",
+    "build": "npm ci && tsc",
     "start": "node dist/server.js",
     "format": "prettier --write \"src/**/*.{ts,js,json,md}\"",
     "lint": "eslint 'src/**/*.{ts,js}' --fix"
