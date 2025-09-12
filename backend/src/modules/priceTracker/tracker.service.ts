@@ -173,7 +173,11 @@ export const fetchProductDetails = async (url: string, platform: string) => {
         if (existingProduct) {
             // Only launch browser if a critical field is missing
             if (!existingProduct.productImg || existingProduct.productImg === "No Data Found") {
-                browser = await (puppeteer as any).launch({ headless: "new" });
+                browser = await (puppeteer as any).launch({
+                    headless: true,
+                    args: ['--no-sandbox', '--disable-setuid-sandbox']
+                    });
+
                 const page = await browser.newPage();
                 await page.setUserAgent(
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
