@@ -6,7 +6,6 @@ import cookieParser from 'cookie-parser';
 import router from './routes/index.js';
 import { errorHandler } from './middleware/error.js';
 import pinoHttp from 'pino-http';
-
 import logger from './config/logger.js';
 
 const app = express();
@@ -45,7 +44,7 @@ app.use(limiter);
 
 // -------------------- Logger Middleware --------------------
 // This will automatically log incoming requests and responses
-app.use(pinoHttp({ logger }));
+app.use((pinoHttp as unknown as (opts: any) => any)({ logger }));
 
 // -------------------- Routes --------------------
 app.use('/api/v1', router);
