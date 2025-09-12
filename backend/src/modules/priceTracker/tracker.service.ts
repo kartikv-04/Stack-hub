@@ -26,13 +26,13 @@ const extractProductId = (url: string, platform: string): string => {
 // Helper function to scrape product details (shared between initial scrape and cron updates)
 const scrapeProductFromPage = async (page: any, platform: string) => {
     const getElement = async (selector: string) => {
-        await page.waitForSelector(selector, { timeout: 7000 }).catch(() => {}); // wait for element
+        await page.waitForSelector(selector, { timeout: 7000 }).catch(() => { }); // wait for element
         return await page.$eval(selector, (El: Element) => El?.textContent?.trim() || "No Data Found")
             .catch(() => "No Data Found");
     };
 
     const getElementAttr = async (selector: string, attr: string) => {
-        await page.waitForSelector(selector, { timeout: 7000 }).catch(() => {}); // wait for element
+        await page.waitForSelector(selector, { timeout: 7000 }).catch(() => { }); // wait for element
         return await page.$eval(selector, (El: Element) => El?.getAttribute(attr)?.trim() || "No Data Found")
             .catch(() => "No Data Found");
     };
@@ -49,7 +49,7 @@ const scrapeProductFromPage = async (page: any, platform: string) => {
                 return Object.keys(parsed)[0]; // first image URL
             }
             return imgEl.getAttribute('data-old-hires') || imgEl.getAttribute('src');
-            });
+        });
 
         logger.info('Image debug:', img);
         const priceText = await getElement('.a-price-whole');
@@ -70,9 +70,59 @@ const scrapeProductFromPage = async (page: any, platform: string) => {
             numericRatings,
             numericTotalRatings
         };
-    } else if (platform === 'flipkart') {
+    } // Replace the Flipkart image scraping part with this:
+    else if (platform === 'flipkart') {
         const title = await getElement('.VU-ZEz');
-        const img = await getElementAttr('#container > div > div._39kFie.N3De93.JxFEK3._48O0EI > div.DOjaWF.YJG4Cf > div.DOjaWF.gdgoEp.col-5-12.MfqIAz > div:nth-child(1) > div > div.qOPjUY > div._8id3KM > div > div._4WELSP._6lpKCl > img', 'src');
+
+        // Try multiple selectors for image - Flipkart changes classes frequently
+        let img = "No Data Found";
+
+        const imageSelectors = [
+            'img.DByuf4',
+            'img._396cs4',
+            'div.CXW8mj img',
+            'img._53J4C-',
+            '.CXW8mj img',
+            '._2r_T1I img',
+            'img[data-tkid]'
+        ];
+
+        for (const selector of imageSelectors) {
+            try {
+                await page.waitForSelector(selector, { timeout: 3000 });
+                img = await page.$eval(selector, (el: HTMLImageElement) => el.src);
+                if (img && img !== "No Data Found" && !img.includes('data:image')) {
+                    logger.info(`Found image with selector: ${selector}`);
+                    break;
+                }
+            } catch (error) {
+                // Continue to next selector
+                continue;
+            }
+        }
+
+        // If still no image found, try a more general approach
+        if (img === "No Data Found") {
+            try {
+                img = await page.evaluate(() => {
+                    const images = document.querySelectorAll('img');
+                    for (const image of images) {
+                        const src = (image as HTMLImageElement).src;
+                        if (src && src.includes('flipkart') &&
+                            (src.includes('product') || src.includes('image')) &&
+                            !src.includes('data:image') &&
+                            !src.includes('icon') &&
+                            !src.includes('logo')) {
+                            return src;
+                        }
+                    }
+                    return "No Data Found";
+                });
+            } catch (error) {
+                logger.error('Error in general image search:', (error as any));
+            }
+        }
+
         const priceText = await getElement('.Nx9bqj');
         const numericPrice = Number(priceText.replace(/[^0-9.]/g, ""));
         const discount = await getElement('.UkUFwK span');
@@ -263,7 +313,7 @@ const updateAllProductPrices = async () => {
                 await new Promise(resolve => setTimeout(resolve, 2000));
 
             } catch (error) {
-                logger.error(`Error updating product ${product.productId}:` +error);
+                logger.error(`Error updating product ${product.productId}:` + error);
                 continue; // Continue with next product
             }
         }
