@@ -7,13 +7,15 @@ import router from './routes/index.js';
 import { errorHandler } from './middleware/error.js';
 import pinoHttp from 'pino-http';
 import logger from './config/logger.js';
+import { CLIENT_URL } from './config/env.js';
 
 const app = express();
 
 // -------------------- Security Middleware --------------------
 app.use(helmet());
 const allowedOrigins = new Set([
-    'http://localhost:3000'
+    CLIENT_URL
+    
 ]);
 
 app.use(cors({
