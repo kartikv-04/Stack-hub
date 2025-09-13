@@ -25,7 +25,7 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold text-foreground">PriceTracker</h1>
+            <h1 className="text-2xl font-bold text-foreground">Stack-hub</h1>
           </div>
           <div className="flex items-center gap-4">
             <Link href="/signin">

@@ -10,7 +10,7 @@ import { Toaster } from "@/components/ui/toaster"
 import { Suspense } from "react"
 
 export const metadata: Metadata = {
-  title: "v0 App",
+  title: "Stack-hub",
   description: "Created with v0",
   generator: "v0.app",
 }
