@@ -4,7 +4,16 @@ Full-stack web application built with Next.js (frontend) and Express + TypeScrip
 ## Features 🔥  
 - Backend: Express, TypeScript, MongoDB, JWT auth, Pino logger, Rate limiting, Helmet, CORS  
 - Frontend: Next.js, modern React features  
-- Deployment ready: Vercel (frontend), Render (backend), MongoDB Atlas (database)  
+- Deployment ready: Vercel (frontend), Render (backend), MongoDB Atlas (database)
+
+## Image
+<img width="1920" height="1080" alt="Screenshot 2025-09-12 230145" src="https://github.com/user-attachments/assets/a63a6217-3409-4ce7-958e-57cecba9433c" />
+<img width="1920" height="1080" alt="Screenshot 2025-09-12 231548" src="https://github.com/user-attachments/assets/d326dd20-3787-4457-836c-262870152acc" />
+<img width="1920" height="1080" alt="Screenshot 2025-09-12 231450" src="https://github.com/user-attachments/assets/6a227c30-bf39-4339-a2ed-ba8aae1f3f2e" />
+<img width="1920" height="1080" alt="Screenshot 2025-09-12 231507" src="https://github.com/user-attachments/assets/ecd5cdc4-065c-42f2-93a2-e1d07afaf360" />
+
+
+
 
 ## Getting Started 🛠️  
 - Clone the repository, 
