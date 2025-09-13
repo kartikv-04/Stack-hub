@@ -12,14 +12,8 @@ Full-stack web application built with Next.js (frontend) and Express + TypeScrip
 - configure environment variables, 
 - and run both apps locally:,
 - git clone https://github.com/kartikv-04/Stack-hub.git,
-- cd Stack-hub && cd frontend,
-- npm install && cd .. ,
-- cd backend && npm install && cd .. ,
-- echo "PORT=5000,
-- MONGO_URI=your_mongodb_connection_string,
-- JWT_SECRET=your_jwt_secret",
-- backend/.env && echo "NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1" ,
-- frontend/.env.local && cd backend && npm run build && npm run dev & cd ../frontend && npm run dev  
+- cd Stack-hub && cd frontend npm install,
+- cd backend && npm install
 
 ## Deployment 🌍  
 - Frontend (Next.js) → Deploy on Vercel, set root directory to `frontend`  
